@@ -1,87 +1,141 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from "react";
+import "./index.css";
 
 function App() {
-    const [a, setA] = useState("");
-    const [b, setB] = useState("");
-    const [resultado, setResultado] = useState(null);
-    const [historial, setHistorial] = useState([]);
+  const [numbers, setNumbers] = useState(["", ""]); // mínimo 2 números
+  const [resultado, setResultado] = useState(null);
+  const [historial, setHistorial] = useState([]);
 
-    const sumar = async () => {
-        const res = await fetch(`http://localhost:8089/calculator/sum?a=${a}&b=${b}`);
-        const data = await res.json();
-        setResultado(data.result);
-        obtenerHistorial();
-    };
+  // Manejar cambio en inputs
+  const handleNumberChange = (index, value) => {
+    const newNumbers = [...numbers];
+    newNumbers[index] = value;
+    setNumbers(newNumbers);
+  };
 
-    const obtenerHistorial = async () => {
-        const res = await fetch("http://localhost:8089/calculator/history");
-        const data = await res.json();
-        setHistorial(data.history);
-    };
+  // Agregar un nuevo input
+  const addInput = () => {
+    setNumbers([...numbers, ""]);
+  };
 
-    useEffect(() => {
-        (async () => {
-            await obtenerHistorial();
-        })();
-    }, [resultado]);
+  // Eliminar el último input (mínimo 2)
+  const removeInput = () => {
+    if (numbers.length > 2) {
+      setNumbers(numbers.slice(0, -1));
+    }
+  };
 
-    return (
-        <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center p-6">
-            <div className="w-full max-w-md bg-gray-800 rounded-xl shadow-lg p-6">
-                <h1 className="text-3xl font-bold text-center text-blue-400 mb-6">
-                    Calculadora
-                </h1>
+  // Llamar a la API
+  const calcular = async (op) => {
+    const query = numbers.map((n) => `numbers=${n}`).join("&");
+    try {
+      const res = await fetch(`http://localhost:8089/calculator/${op}?${query}`);
+      if (!res.ok) {
+        console.error("Error en cálculo:", res.status);
+        setResultado("Error en la operación");
+        return;
+      }
+      const data = await res.json();
+      setResultado(data.result);
+      obtenerHistorial();
+    } catch (err) {
+      console.error("Error de red:", err);
+      setResultado("Error de conexión");
+    }
+  };
 
-                {/* Inputs */}
-                <div className="flex flex-col space-y-4">
-                    <input
-                        type="number"
-                        value={a}
-                        onChange={(e) => setA(e.target.value)}
-                        placeholder="Número 1"
-                        className="px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                        type="number"
-                        value={b}
-                        onChange={(e) => setB(e.target.value)}
-                        placeholder="Número 2"
-                        className="px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                        onClick={sumar}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition duration-200"
-                    >
-                        Sumar
-                    </button>
-                </div>
+  // Obtener historial
+  const obtenerHistorial = async () => {
+    try {
+      const res = await fetch("http://localhost:8089/calculator/history");
+      if (!res.ok) {
+        console.error("Error al obtener historial:", res.status);
+        setHistorial([]);
+        return;
+      }
+      const data = await res.json();
+      setHistorial(data.history || []);
+    } catch (err) {
+      console.error("Error de red:", err);
+      setHistorial([]);
+    }
+  };
 
-                {/* Resultado */}
-                {resultado !== null && (
-                    <h2 className="mt-6 text-xl font-semibold text-green-400 text-center">
-                        Resultado: {resultado}
-                    </h2>
-                )}
+  useEffect(() => {
+    obtenerHistorial();
+  }, [resultado]);
 
-                {/* Historial */}
-                <div className="mt-8">
-                    <h3 className="text-lg font-semibold text-gray-300 mb-3">Historial:</h3>
-                    <ul className="space-y-2 max-h-40 overflow-y-auto">
-                        {historial.map((op, i) => (
-                            <li
-                                key={i}
-                                className="bg-gray-700 px-4 py-2 rounded-lg border border-gray-600 text-sm"
-                            >
-                                {op.a} + {op.b} ={" "}
-                                <span className="text-green-400 font-bold">{op.result}</span>{" "}
-                                <span className="text-gray-400 text-xs">({op.date})</span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            </div>
+  return (
+    <div className="container">
+      <div className="calculator">
+        <h1>Calculadora</h1>
+
+        {/* Inputs dinámicos */}
+        {numbers.map((num, i) => (
+          <input
+            key={i}
+            type="number"
+            value={num}
+            onChange={(e) => handleNumberChange(i, e.target.value)}
+            placeholder={`Número ${i + 1}`}
+          />
+        ))}
+
+        {/* Botones para manejar inputs */}
+        <div className="input-buttons">
+          <button className="add-input" onClick={addInput}>
+            + Agregar número
+          </button>
+          <button
+            className="remove-input"
+            onClick={removeInput}
+            disabled={numbers.length <= 2}
+          >
+            - Eliminar número
+          </button>
         </div>
-    );
+
+        {/* Botones de operaciones */}
+        <button className="sum" onClick={() => calcular("sum")}>
+          Sumar
+        </button>
+        <button className="sub" onClick={() => calcular("sub")}>
+          Restar
+        </button>
+        <button className="mul" onClick={() => calcular("mul")}>
+          Multiplicar
+        </button>
+        <button className="div" onClick={() => calcular("div")}>
+          Dividir
+        </button>
+
+        {/* Resultado */}
+        {resultado !== null && (
+          <div className="resultado">Resultado: {resultado}</div>
+        )}
+
+        {/* Historial */}
+        <div className="historial">
+          <h3>Historial:</h3>
+          <ul>
+            {historial.length > 0 ? (
+              historial.map((op, i) => (
+                <li key={i}>
+                  {op.operation}({op.numbers.join(", ")}) ={" "}
+                  <strong>{op.result}</strong>{" "}
+                  <span style={{ fontSize: "0.8rem", color: "#aaa" }}>
+                    ({op.date})
+                  </span>
+                </li>
+              ))
+            ) : (
+              <li>No hay historial</li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default App;
