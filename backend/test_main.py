@@ -139,6 +139,15 @@ def test_history_limit():
     assert response.status_code == 200
     assert len(response.json()["history"]) == 5
 
+def test_history_order_desc():
+    mock_collection.insert_many([
+        {"operation": "sum", "numbers": [1, 2], "result": 3, "date": main.datetime.datetime(2025, 1, 1, tzinfo=main.datetime.timezone.utc)},
+        {"operation": "sum", "numbers": [3, 4], "result": 7, "date": main.datetime.datetime(2025, 1, 2, tzinfo=main.datetime.timezone.utc)}
+    ])
+    response = client.get("/calculator/history?order=desc")
+    assert response.json()["history"][0]["result"] == 7
+
+
 # --- BATCH ---
 def test_batch_operations_success():
     response = client.post("/calculator/batch", json={
