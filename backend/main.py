@@ -1,11 +1,14 @@
 import datetime
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from pymongo import MongoClient
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from typing import List
 
+# Inicializar FastAPI
 app = FastAPI()
 
+# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,67 +17,82 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Conexión MongoDB (docker-compose)
 client = MongoClient("mongodb://admin_user:web3@mongo:27017/")
 database = client.practica1
 collection_historial = database.historial
 
-# --- Helpers ---
+# Modelo de entrada: lista de números
+class OperationInput(BaseModel):
+    numbers: List[float]
+
+# Función auxiliar para validaciones
 def validate_numbers(numbers: List[float]):
     if any(n < 0 for n in numbers):
-        raise HTTPException(status_code=400, detail="No se permiten números negativos")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "No se permiten números negativos", "numbers": numbers},
+        )
+    if len(numbers) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Se requieren al menos 2 números", "numbers": numbers},
+        )
 
-def save_operation(op: str, numbers: List[float], result: float):
+# Guardar en historial
+def save_history(operation: str, numbers: List[float], result: float):
     document = {
-        "operation": op,
+        "operation": operation,
         "numbers": numbers,
         "result": result,
-        "date": datetime.datetime.now(tz=datetime.timezone.utc)
+        "date": datetime.datetime.now(tz=datetime.timezone.utc),
     }
     collection_historial.insert_one(document)
-    return document
 
-# --- Operaciones ---
-@app.get("/calculator/{op}")
-def calculate(op: str, numbers: List[float] = Query(...)):
-    validate_numbers(numbers)
+# Endpoints
 
-    if op == "sum":
-        result = sum(numbers)
-    elif op == "sub":
-        result = numbers[0]
-        for n in numbers[1:]:
-            result -= n
-    elif op == "mul":
-        result = 1
-        for n in numbers:
-            result *= n
-    elif op == "div":
-        result = numbers[0]
-        for n in numbers[1:]:
-            if n == 0:
-                raise HTTPException(status_code=403, detail="División entre cero no permitida")
-            result /= n
-    else:
-        raise HTTPException(status_code=404, detail="Operación no soportada")
+@app.post("/calculator/sum")
+def sum_numbers(data: OperationInput):
+    validate_numbers(data.numbers)
+    result = sum(data.numbers)
+    save_history("sum", data.numbers, result)
+    return {"operation": "sum", "numbers": data.numbers, "result": result}
 
-    doc = save_operation(op, numbers, result)
-    return {"operation": op, "numbers": numbers, "result": result, "date": doc["date"]}
+@app.post("/calculator/sub")
+def sub_numbers(data: OperationInput):
+    validate_numbers(data.numbers)
+    result = data.numbers[0]
+    for n in data.numbers[1:]:
+        result -= n
+    save_history("sub", data.numbers, result)
+    return {"operation": "sub", "numbers": data.numbers, "result": result}
 
-# --- Historial con filtros ---
+@app.post("/calculator/mul")
+def mul_numbers(data: OperationInput):
+    validate_numbers(data.numbers)
+    result = 1
+    for n in data.numbers:
+        result *= n
+    save_history("mul", data.numbers, result)
+    return {"operation": "mul", "numbers": data.numbers, "result": result}
+
+@app.post("/calculator/div")
+def div_numbers(data: OperationInput):
+    validate_numbers(data.numbers)
+    if any(n == 0 for n in data.numbers[1:]):  # evitar dividir entre cero
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "División entre cero no permitida", "numbers": data.numbers},
+        )
+    result = data.numbers[0]
+    for n in data.numbers[1:]:
+        result /= n
+    save_history("div", data.numbers, result)
+    return {"operation": "div", "numbers": data.numbers, "result": result}
+
 @app.get("/calculator/history")
-def obtain_history(
-    op: Optional[str] = None,
-    sort_by: str = "date",
-    order: str = "desc",
-    limit: int = Query(10, ge=1, le=100)  # valor por defecto
-):
-    query = {}
-    if op:
-        query["operation"] = op
-
-    sort_order = -1 if order == "desc" else 1
-    records = collection_historial.find(query).sort(sort_by, sort_order).limit(limit)
-
+def obtain_history(limit: int = 10):
+    records = collection_historial.find().sort("date", -1).limit(limit)
     history = []
     for record in records:
         history.append({
@@ -83,5 +101,4 @@ def obtain_history(
             "result": record.get("result"),
             "date": record["date"].isoformat() if "date" in record else None
         })
-
     return {"history": history}
