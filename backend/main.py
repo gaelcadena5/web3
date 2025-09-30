@@ -105,6 +105,7 @@ def obtain_history(
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD or ISO date"),
     sort_by: Optional[str] = Query("date", description="date or result"),
     order: Optional[str] = Query("desc", description="asc or desc"),
+    limit: int = Query(10, ge=1, le=100),
 ):
     query = {}
 
@@ -132,7 +133,8 @@ def obtain_history(
     sort_field = "date" if sort_by not in {"date", "result"} else sort_by
     sort_order = -1 if order == "desc" else 1
 
-    records = collection_historial.find(query).sort(sort_field, sort_order)
+    records = collection_historial.find(query).sort(sort_field, sort_order).limit(limit)
+
 
     history = []
     for record in records:

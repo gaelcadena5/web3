@@ -138,3 +138,45 @@ def test_history_limit():
     response = client.get("/calculator/history?limit=5")
     assert response.status_code == 200
     assert len(response.json()["history"]) == 5
+
+# --- BATCH ---
+def test_batch_operations_success():
+    response = client.post("/calculator/batch", json={
+        "operations": [
+            {"op": "sum", "nums": [1, 2]},
+            {"op": "mul", "nums": [3, 4]}
+        ]
+    })
+    assert response.status_code == 200
+    assert response.json() == [
+        {"op": "sum", "result": 3},
+        {"op": "mul", "result": 12}
+    ]
+
+def test_batch_invalid_operation():
+    response = client.post("/calculator/batch", json={
+        "operations": [
+            {"op": "pow", "nums": [2, 3]}
+        ]
+    })
+    assert response.status_code == 400
+    assert "Operación no soportada" in response.json()["detail"]["error"]
+
+def test_batch_negative_numbers():
+    response = client.post("/calculator/batch", json={
+        "operations": [
+            {"op": "sum", "nums": [-1, 2]}
+        ]
+    })
+    assert response.status_code == 400
+    assert "No se permiten números negativos" in response.json()["detail"]["error"]
+
+def test_batch_division_by_zero():
+    response = client.post("/calculator/batch", json={
+        "operations": [
+            {"op": "div", "nums": [10, 0]}
+        ]
+    })
+    assert response.status_code == 403
+    assert "División entre cero no permitida" in response.json()["detail"]["error"]
+
