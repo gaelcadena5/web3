@@ -26,6 +26,14 @@ collection_historial = database.historial
 class OperationInput(BaseModel):
     numbers: List[float]
 
+# Modelo para operaciones en lote
+class BatchOperation(BaseModel):
+    op: str
+    nums: List[float]
+
+class BatchInput(BaseModel):
+    operations: List[BatchOperation]
+
 # Validaciones
 def validate_numbers(numbers: List[float]):
     if any(n < 0 for n in numbers):
@@ -136,3 +144,49 @@ def obtain_history(
         })
 
     return {"history": history}
+
+@app.post("/calculator/batch")
+def batch_operations(data: BatchInput):
+    supported_ops = {"sum", "sub", "mul", "div"}
+    results = []
+
+    for item in data.operations:
+        op = item.op
+        nums = item.nums
+
+        if op not in supported_ops:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": f"Operación no soportada: {op}", "operation": op, "numbers": nums}
+            )
+
+        try:
+            validate_numbers(nums)
+
+            if op == "sum":
+                result = sum(nums)
+            elif op == "sub":
+                result = nums[0]
+                for n in nums[1:]:
+                    result -= n
+            elif op == "mul":
+                result = 1
+                for n in nums:
+                    result *= n
+            elif op == "div":
+                if any(n == 0 for n in nums[1:]):
+                    raise HTTPException(
+                        status_code=403,
+                        detail={"error": "División entre cero no permitida", "operation": op, "numbers": nums}
+                    )
+                result = nums[0]
+                for n in nums[1:]:
+                    result /= n
+
+            save_history(op, nums, result)
+            results.append({"op": op, "result": result})
+
+        except HTTPException as e:
+            raise e
+
+    return results
