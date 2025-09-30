@@ -1,14 +1,14 @@
 import datetime
-from fastapi import FastAPI, HTTPException
+from datetime import timedelta
+from typing import List, Optional
+
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from pymongo import MongoClient
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
 
-# Inicializar FastAPI
 app = FastAPI()
 
-# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +26,7 @@ collection_historial = database.historial
 class OperationInput(BaseModel):
     numbers: List[float]
 
-# Función auxiliar para validaciones
+# Validaciones
 def validate_numbers(numbers: List[float]):
     if any(n < 0 for n in numbers):
         raise HTTPException(
@@ -49,8 +49,7 @@ def save_history(operation: str, numbers: List[float], result: float):
     }
     collection_historial.insert_one(document)
 
-# Endpoints
-
+# Operaciones
 @app.post("/calculator/sum")
 def sum_numbers(data: OperationInput):
     validate_numbers(data.numbers)
@@ -90,9 +89,31 @@ def div_numbers(data: OperationInput):
     save_history("div", data.numbers, result)
     return {"operation": "div", "numbers": data.numbers, "result": result}
 
+# Historial con filtros
 @app.get("/calculator/history")
-def obtain_history(limit: int = 10):
-    records = collection_historial.find().sort("date", -1).limit(limit)
+def obtain_history(
+    operation: Optional[str] = Query(None, description="sum|sub|mul|div"),
+    sort_by: Optional[str] = Query("date", description="date or result"),
+    order: Optional[str] = Query("desc", description="asc or desc"),
+    limit: int = Query(10, ge=1, le=100),
+):
+    query = {}
+
+    # Filtrar por operación (si se pidió)
+    if operation:
+        if operation not in {"sum", "sub", "mul", "div"}:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "Operación no válida. Usa sum, sub, mul o div", "operation": operation},
+            )
+        query["operation"] = operation
+
+    # Orden y campo de ordenamiento
+    sort_field = "date" if sort_by not in {"date", "result"} else sort_by
+    sort_order = -1 if order == "desc" else 1
+
+    records = collection_historial.find(query).sort(sort_field, sort_order).limit(limit)
+
     history = []
     for record in records:
         history.append({
@@ -101,4 +122,5 @@ def obtain_history(limit: int = 10):
             "result": record.get("result"),
             "date": record["date"].isoformat() if "date" in record else None
         })
+
     return {"history": history}
