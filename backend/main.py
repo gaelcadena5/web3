@@ -93,9 +93,10 @@ def div_numbers(data: OperationInput):
 @app.get("/calculator/history")
 def obtain_history(
     operation: Optional[str] = Query(None, description="sum|sub|mul|div"),
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD or ISO date"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD or ISO date"),
     sort_by: Optional[str] = Query("date", description="date or result"),
     order: Optional[str] = Query("desc", description="asc or desc"),
-    limit: int = Query(10, ge=1, le=100),
 ):
     query = {}
 
@@ -108,11 +109,22 @@ def obtain_history(
             )
         query["operation"] = operation
 
+    # Filtrar por fecha (si se pidieron)
+    if date_from:
+        try:
+            df = datetime.datetime.fromisoformat(date_from)
+            if df.tzinfo is None:
+                df = df.replace(tzinfo=datetime.timezone.utc)
+        except Exception:
+            raise HTTPException(status_code=400, detail={"error": "Formato date_from inválido (usa YYYY-MM-DD o ISO)"})
+        query.setdefault("date", {})
+        query["date"]["$gte"] = df
+
     # Orden y campo de ordenamiento
     sort_field = "date" if sort_by not in {"date", "result"} else sort_by
     sort_order = -1 if order == "desc" else 1
 
-    records = collection_historial.find(query).sort(sort_field, sort_order).limit(limit)
+    records = collection_historial.find(query).sort(sort_field, sort_order)
 
     history = []
     for record in records:

@@ -197,13 +197,11 @@ function App() {
             </div>
 
             <div>
-              <label className="text-sm text-gray-300">Límite</label>
+              <label className="text-sm text-gray-300">Fecha de ejecución</label>
               <input
-                type="number"
-                min={1}
-                max={100}
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
                 className="w-full mt-1 px-3 py-2 rounded bg-gray-800 border border-gray-700"
               />
             </div>
