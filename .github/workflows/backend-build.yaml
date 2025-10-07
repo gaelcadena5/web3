@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    permission:s:
+    permissions:
       contents: read
       packages: write
     
@@ -28,16 +28,23 @@ jobs:
       - name: Determine image tags
         id: vars
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            echo "TAG=${GITHUB_REF_NAME}" >> $ GITHUB_ENV
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+            echo "IS_TAG=true" >> $GITHUB_ENV
           else
             echo "TAG=latest" >> $GITHUB_ENV
+            echo "IS_TAG=false" >> $GITHUB_ENV
           fi
-      
+
       - name: Build Docker image
         run: |
           docker build -t ghcr.io/${{ github.repository }}:${{ env.TAG }} ./backend
 
       - name: Push Docker image
         run: |
-          docker push ghrc.io/${{ github.repository }}:${{ env.TAG }}
+          docker push ghcr.io/${{ github.repository }}:${{ env.TAG }}
+          # Si es un tag, también etiquetamos como latest
+          if [ "${{ env.IS_TAG }}" == "true" ]; then
+            docker tag ghcr.io/${{ github.repository }}:${{ env.TAG }} ghcr.io/${{ github.repository }}:latest
+            docker push ghcr.io/${{ github.repository }}:latest
+          fi
